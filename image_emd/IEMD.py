@@ -1,3 +1,10 @@
+import scipy
+import numpy as np
+import scipy as sp
+import scipy.interpolate
+import matlab.engine
+
+
 # Starts the matlab engine and returns the engine as a object
 def start_matlab_engine():
     return matlab.engine.start_matlab()
@@ -6,36 +13,70 @@ def start_matlab_engine():
 # Performs the Empirical Mode Decomposition on some bidirectional data.
 # img is a numpy array of some size MxN and engine is the matlab engine.
 # depth is the sensitivity of the extremas. A higher number results in fewer extremas.
-def IEMD(img, engine, depth=0):
-    
+def IEMD(img, epsilon, max_imfs, engine, depth=0):
+    residue = np.copy(img)
+    imfs = np.zeros((max_imfs, img.shape[0], img.shape[1]))
+    count = 0
+    for i in range(0, max_imfs):
+        print("Getting IMF ", count + 1)
+        imf = sifting(residue, epsilon, engine, depth)
+        residue = residue - imf
+        imfs[i,:,:] = imf
+        count = count + 1
+        print("IMF ", count + 1, " done")
+        if monotonic(residue, engine, depth):
+            return imfs[:count], residue
+    return imfs[:count], residue
+
+# Performs the sifting process until a single IMF is found
+def sifting(img, epsilon, engine, depth):
+    h_prev = img
+    mean = single_sifting(h_prev, engine, depth)
+    h_curr = h_prev - mean
+    count = 0
+    while not (sd(h_curr, h_prev) < epsilon):
+        mean = single_sifting(h_curr, engine, depth)
+        h_prev = h_curr
+        h_curr = h_prev - mean
+        count = count + 1
+        print("Sifting loop ", count, " sd: ", sd(h_curr, h_prev))
+    return h_curr
 
 
+# Performs a single sifting
+def single_sifting(img, engine, depth):
+    maxima, minima, maxima_loc, minima_loc = extrema(img, engine, depth)
 
-def sifting(img, engine, depth=0):
-    
-
-def single_sifting(img, engine, depth=0):
-    maxima, minima, maxima_loc, minima_loc = extrema(img, engine)
-
-    x_max, y_max, z_max = 3D_coords(maxima, maxima_loc)
-    x_min, y_min, z_min = 3D_coords(minima, minima_loc)
+    x_max, y_max, z_max = triplex_coords(maxima, maxima_loc)
+    x_min, y_min, z_min = triplex_coords(minima, minima_loc)
 
     _,_,_, upper_spline = create_spline(x_max, y_max, z_max)
     _,_,_, lower_spline = create_spline(x_min, y_min, z_min)
 
-    upper_img = reconstruct_image(img.size, upper_spline)
-    lower_img = reconstruct_image(img.size, lower_spline)
+    upper_img = reconstruct_image(img.shape, upper_spline)
+    lower_img = reconstruct_image(img.shape, lower_spline)
 
     mean = surface_mean(upper_img, lower_img)
 
     return mean
 
-# Checks whether the stopping criterion for and IMF is satisfied
-def stopping_criterion():
+# Checks whether the residue is monotonic or not, that is, if the residue has less than 2 extrema.
+def monotonic(residue, engine, depth):
+    _,_, maxima_loc, minima_loc = extrema(residue, engine, depth)
+    num_extrema = np.sum(maxima_loc) + np.sum(minima_loc)
+    if num_extrema < 2:
+        return True
+    return False
 
+
+# Calculates the stopping criterion value (sd = standard deviation??)
+def sd(h_curr, h_prev):
+    numerator = np.square(h_prev - h_curr)
+    denominator = np.square(h_prev)
+    return np.sum(numerator / denominator)
 
 # Calculated the piecewise mean of the upper and lower interpolation
-def surface_mean(upper_img, lower_img)
+def surface_mean(upper_img, lower_img):
     return (upper_img + lower_img) / 2
 
 # Reconstructs the upper and lower plate based on found spline.
@@ -46,9 +87,8 @@ def reconstruct_image(size, spline):
             new_img[iy, ix] = spline(ix, iy)
     return new_img
 
-
 # Converts a 2D array to its (x, y, z) coordinates in 3D space
-def 3D_coords(locations, values):
+def triplex_coords(locations, values):
     x = np.array([])
     y = np.array([])
     z = np.array([])
@@ -61,12 +101,12 @@ def 3D_coords(locations, values):
     return x, y, z
 
 # Returns the values of the mixima and minima in their respective locations
-def extrema(img, engine, depth=0):
-    mat_img = matlab.double(img)
-    maxima_loc = mat2np(eng.imextendedmax(img, depth))
-    minima_loc = mat2np(eng.imextendedmin(img, depth))
+def extrema(img, engine, depth):
+    mat_img = matlab.double(img.tolist())
+    maxima_loc = mat2np(engine.imextendedmax(mat_img, depth))
+    minima_loc = mat2np(engine.imextendedmin(mat_img, depth))
     maxima = maxima_loc * img
-    minima = minima * img
+    minima = minima_loc * img
     return maxima, minima, maxima_loc, minima_loc
 
 # A fast conversion from matlab.double array to numpy array
