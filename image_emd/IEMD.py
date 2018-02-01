@@ -17,22 +17,19 @@ def start_matlab_engine():
 def IEMD(
          img,
          engine,
-         epsilon=None,
          max_imfs=10,
          depth=0,
-         crit_type='fixed',
-         num_siftings=10,
          spline_lib='alglib', # Options: alglib, scipy
-         rbase=5.0,
-         nlayers=5,
-         lambdaNS=0.0
+         rbase=5.0, nlayers=5, lambdaNS=0.0,
+         crit_type='fixed',
+         epsilon=10, num_siftings=10,
          ):
     residue = np.copy(img)
     imfs = np.zeros((max_imfs, img.shape[0], img.shape[1]))
     count = 0
     for i in range(0, max_imfs):
         print("Getting IMF ", count + 1)
-        imf = sifting(residue, epsilon, engine, depth, crit_type, num_siftings, spline_lib, rbase, nlayers, lambdaNS)
+        imf = sifting( img, engine, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
         residue = residue - imf
         imfs[i,:,:] = imf
         count = count + 1
@@ -42,7 +39,15 @@ def IEMD(
     return imfs[:count], residue
 
 # Performs the sifting process until a single IMF is found
-def sifting(img, epsilon, engine, depth, crit_type, num_siftings, spline_lib, rbase, nlayers, lambdaNS):
+def sifting(
+         img,
+         engine,
+         depth=0,
+         spline_lib='alglib', # Options: alglib, scipy
+         rbase=5.0, nlayers=5, lambdaNS=0.0,
+         crit_type='fixed',
+         epsilon=10, num_siftings=10,
+        ):
     h_prev = img
     mean = single_sifting(h_prev, engine, depth, spline_lib, rbase, nlayers, lambdaNS)
     h_curr = h_prev - mean
@@ -61,7 +66,7 @@ def sifting(img, epsilon, engine, depth, crit_type, num_siftings, spline_lib, rb
 # If this variation is under a certain value, the sifting process terminates.
 # fixed is a termination based on a fixed number of siftings. Research has shown that 10 siftings will
 # consistently give optimal IMFs.
-def stopping_criterion(count, h_curr, h_prev, crit_type='fixed', num_siftings=10, epsilon=None):
+def stopping_criterion(count, h_curr, h_prev, crit_type='fixed', num_siftings=10, epsilon=10):
     if crit_type == 'fixed':
         return count == num_siftings
     elif crit_type == 'sd':
@@ -72,7 +77,7 @@ def stopping_criterion(count, h_curr, h_prev, crit_type='fixed', num_siftings=10
 
 
 # Performs a single sifting
-def single_sifting(img, engine, depth, spline_lib, rbase, nlayers, lambdaNS):
+def single_sifting(img, engine, depth=0, spline_lib='alglib', rbase=5.0, nlayers=5, lambdaNS=0):
     maxima, minima, maxima_loc, minima_loc = extrema(img, engine, depth)
 
     x_max, y_max, z_max = triplex_coords(maxima_loc, maxima)
@@ -99,7 +104,7 @@ def single_sifting(img, engine, depth, spline_lib, rbase, nlayers, lambdaNS):
     return mean
 
 # Checks whether the residue is monotonic or not, that is, if the residue has less than 2 extrema.
-def monotonic(residue, engine, depth):
+def monotonic(residue, engine, depth=0):
     _,_, maxima_loc, minima_loc = extrema(residue, engine, depth)
     num_extrema = np.sum(maxima_loc) + np.sum(minima_loc)
     if num_extrema < 2:
@@ -161,7 +166,7 @@ def triplex_coords(locations, values):
     return x, y, z
 
 # Returns the values of the mixima and minima in their respective locations
-def extrema(img, engine, depth):
+def extrema(img, engine, depth=0):
     mat_img = matlab.double(img.tolist())
     maxima_loc = mat2np(engine.imextendedmax(mat_img, depth))
     minima_loc = mat2np(engine.imextendedmin(mat_img, depth))
@@ -179,7 +184,7 @@ def create_spline(x,y,z,function='thin-plate'):
     return spline
 
 # Constructs the spline using the AlgLib RBF Gaussian algorithm
-def create_spline_v2(x, y, z, rbase=1.0,nlayers=3,lambdaNS=0.0):
+def create_spline_v2(x, y, z, rbase=5.0,nlayers=5,lambdaNS=0.0):
     xy = np.zeros((x.shape[0], 3))
     xy[:,0] = x
     xy[:,1] = y
