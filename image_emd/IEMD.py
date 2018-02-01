@@ -1,8 +1,7 @@
 import scipy
 import numpy as np
-import scipy as sp
-import scipy.interpolate
 import matlab.engine
+import xalglib as xal
 
 
 # Starts the matlab engine and returns the engine as a object
@@ -15,13 +14,25 @@ def start_matlab_engine():
 # + "depth" is the sensitivity of the extremas. A higher number results in fewer extremas.
 # + "spline_lib": "alglib" OR "scipy". Alglib is recommended as it is significantly
 # faster and much more memory efficient.
-def IEMD(img, epsilon, max_imfs, engine, depth=0, spline_lib='alglib', rbase=1.0, nlayers=3, lambdaNS=0.0):
+def IEMD(
+         img,
+         engine,
+         epsilon=None,
+         max_imfs=10,
+         depth=0,
+         crit_type='fixed',
+         num_siftings=10,
+         spline_lib='alglib', # Options: alglib, scipy
+         rbase=5.0,
+         nlayers=5,
+         lambdaNS=0.0
+         ):
     residue = np.copy(img)
     imfs = np.zeros((max_imfs, img.shape[0], img.shape[1]))
     count = 0
     for i in range(0, max_imfs):
         print("Getting IMF ", count + 1)
-        imf = sifting(residue, epsilon, engine, depth, spline_lib, rbase, nlayers, lambdaNS)
+        imf = sifting(residue, epsilon, engine, depth, crit_type, num_siftings, spline_lib, rbase, nlayers, lambdaNS)
         residue = residue - imf
         imfs[i,:,:] = imf
         count = count + 1
@@ -31,18 +42,33 @@ def IEMD(img, epsilon, max_imfs, engine, depth=0, spline_lib='alglib', rbase=1.0
     return imfs[:count], residue
 
 # Performs the sifting process until a single IMF is found
-def sifting(img, epsilon, engine, depth, spline_lib, rbase, nlayers, lambdaNS):
+def sifting(img, epsilon, engine, depth, crit_type, num_siftings, spline_lib, rbase, nlayers, lambdaNS):
     h_prev = img
     mean = single_sifting(h_prev, engine, depth, spline_lib, rbase, nlayers, lambdaNS)
     h_curr = h_prev - mean
     count = 0
-    while not (sd(h_curr, h_prev) < epsilon):
+    while not stopping_criterion(count, h_curr, h_prev, crit_type, num_siftings, epsilon):
         mean = single_sifting(h_curr, engine, depth, spline_lib, rbase, nlayers, lambdaNS)
         h_prev = h_curr
         h_curr = h_prev - mean
         count = count + 1
         print("Sifting loop ", count, " sd: ", sd(h_curr, h_prev))
     return h_curr
+
+# Stopping criterion function.
+# + Options: sd, fixed
+# sd is a termination based on the standard deviation and looks at the variation from one sifting to another.
+# If this variation is under a certain value, the sifting process terminates.
+# fixed is a termination based on a fixed number of siftings. Research has shown that 10 siftings will
+# consistently give optimal IMFs.
+def stopping_criterion(count, h_curr, h_prev, crit_type='fixed', num_siftings=10, epsilon=None):
+    if crit_type == 'fixed':
+        return count == num_siftings
+    elif crit_type == 'sd':
+        return sd(h_curr, h_prev) < epsilon
+    else:
+        raise Exception("Undefined criterion type ", crit_type, " for variable crit_type")
+
 
 
 # Performs a single sifting
@@ -149,7 +175,7 @@ def mat2np(mat):
 
 # Constructs the spline using the SciPy Rbf algorithm
 def create_spline(x,y,z,function='thin-plate'):
-    spline = sp.interpolate.Rbf(x,y,z,function=function)
+    spline = scipy.interpolate.Rbf(x,y,z,function=function)
     return spline
 
 # Constructs the spline using the AlgLib RBF Gaussian algorithm
@@ -170,6 +196,6 @@ def create_spline_old(x,y,z):
     y_grid = np.linspace(0, 75, len(y))
     X, Y = np.meshgrid(x_grid, y_grid, indexing='xy')
     Z = np.zeros((x.size, z.size))
-    spline = sp.interpolate.Rbf(x,y,z,function='thin-plate')
+    spline = scipy.interpolate.Rbf(x,y,z,function='thin-plate')
     Z = spline(X,Y)
     return X, Y, Z, spline
