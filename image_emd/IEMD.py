@@ -29,7 +29,7 @@ def IEMD(
     count = 0
     for i in range(0, max_imfs):
         print("Getting IMF ", count + 1)
-        imf = sifting( img, engine, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
+        imf = sifting(residue, engine, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
         residue = residue - imf
         imfs[i,:,:] = imf
         count = count + 1
