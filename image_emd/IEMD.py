@@ -32,8 +32,8 @@ def IEMD(
         imf = sifting(residue, engine, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
         residue = residue - imf
         imfs[i,:,:] = imf
-        count = count + 1
         print("IMF ", count + 1, " done")
+        count = count + 1
         if monotonic(residue, engine, depth):
             return imfs[:count], residue
     return imfs[:count], residue
