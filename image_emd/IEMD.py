@@ -28,7 +28,6 @@ def IEMD(
     imfs = np.zeros((max_imfs, img.shape[0], img.shape[1]))
     count = 0
     for i in range(0, max_imfs):
-        print("Getting IMF ", count + 1)
         imf = sifting(residue, engine, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
         residue = residue - imf
         imfs[i,:,:] = imf
@@ -57,7 +56,6 @@ def sifting(
         h_prev = h_curr
         h_curr = h_prev - mean
         count = count + 1
-        print("Sifting loop ", count, " sd: ", sd(h_curr, h_prev))
     return h_curr
 
 # Stopping criterion function.
