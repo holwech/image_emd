@@ -151,7 +151,7 @@ def reconstruct_v2(size, model):
     y_grid = np.linspace(0, size[1], size[1])
     X, Y = np.meshgrid(x_grid, y_grid, indexing='xy')
     Z = xal.rbfgridcalc2v(model, x_grid.tolist(), X.shape[0], x_grid.tolist(), Y.shape[0])
-    Z = Z = np.asarray(Z).reshape((75,75))
+    Z = np.asarray(Z).reshape(size)
     return X, Y, Z
 
 def reconstruct_image_old(size, spline):
