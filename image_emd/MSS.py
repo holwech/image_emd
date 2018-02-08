@@ -25,18 +25,18 @@ def create_masking_signal(img, freq, ampl, freq_modifier, ampl_modifier=1):
     return masking_signal
 
 
-def mode_mixing_separation(img, freq, ampl, eng, rbase=15, freq_modifier=1.2, ampl_modifier=1, debug=False):
+def mode_mixing_separation(img, freq, ampl, eng, rbase=15, num_siftings=10, freq_modifier=1.2, ampl_modifier=1, debug=False):
     if debug:
         print("freq_modifier:", freq_modifier, "ampl_modifier:", ampl_modifier)
     masking_signal = create_masking_signal(img, freq, ampl, freq_modifier)
     mask_pos = img + masking_signal
     mask_neg = img - masking_signal
-    imf_pos, residue_pos = iemd.IEMD(mask_pos, eng, rbase=rbase, max_imfs=1, debug=debug)
-    imf_neg, residue_neg = iemd.IEMD(mask_neg, eng, rbase=rbase, max_imfs=1, debug=debug)
+    imf_pos, residue_pos = iemd.IEMD(mask_pos, eng, rbase=rbase, num_siftings=num_siftings, max_imfs=1, debug=debug)
+    imf_neg, residue_neg = iemd.IEMD(mask_neg, eng, rbase=rbase, num_siftings=num_siftings, max_imfs=1, debug=debug)
     residue = (residue_pos + residue_neg) / 2
     first_imf = (imf_pos + imf_neg) / 2
     return first_imf, residue
 
-def mode_mixing_separation_noise_removal(img, eng, rbase=15, freq_modifier=1.2, ampl_modifier=1, debug=False):
+def mode_mixing_separation_noise_removal(img, eng, rbase=15, num_siftings=10, freq_modifier=1.2, ampl_modifier=1, debug=False):
     freq, ampl = image_freq_and_ampl(img, eng)
-    return mode_mixing_separation(img, freq, ampl, eng, rbase=rbase, freq_modifier=freq_modifier, debug=debug)
+    return mode_mixing_separation(img, freq, ampl, eng, rbase=rbase, num_siftings=num_siftings, freq_modifier=freq_modifier, debug=debug)

@@ -23,15 +23,17 @@ def IEMD(
          rbase=5.0, nlayers=5, lambdaNS=0.0,
          crit_type='fixed',
          epsilon=10, num_siftings=10,
-         debug=False
+         debug=0
          ):
-    if debug:
+    if debug > 0:
         debug_print( max_imfs, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
     residue = np.copy(img)
     imfs = np.zeros((max_imfs, img.shape[0], img.shape[1]))
     count = 0
     for i in range(0, max_imfs):
-        imf = sifting(residue, engine, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
+        if debug > 1:
+            print("Getting IMF ", count + 1)
+        imf = sifting(residue, engine, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings, debug)
         residue = residue - imf
         imfs[i,:,:] = imf
         count = count + 1
@@ -62,6 +64,7 @@ def sifting(
          rbase=5.0, nlayers=5, lambdaNS=0.0,
          crit_type='fixed',
          epsilon=10, num_siftings=10,
+         debug=0
         ):
     h_prev = img
     mean = single_sifting(h_prev, engine, depth, spline_lib, rbase, nlayers, lambdaNS)
@@ -72,6 +75,8 @@ def sifting(
         h_prev = h_curr
         h_curr = h_prev - mean
         count = count + 1
+        if debug > 2:
+            print("Sifting loop ", count, " sd: ", sd(h_curr, h_prev))
     return h_curr
 
 # Stopping criterion function.
