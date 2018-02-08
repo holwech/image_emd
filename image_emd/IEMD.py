@@ -23,7 +23,10 @@ def IEMD(
          rbase=5.0, nlayers=5, lambdaNS=0.0,
          crit_type='fixed',
          epsilon=10, num_siftings=10,
+         debug=False
          ):
+    if debug:
+        debug_print( max_imfs, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
     residue = np.copy(img)
     imfs = np.zeros((max_imfs, img.shape[0], img.shape[1]))
     count = 0
@@ -31,11 +34,24 @@ def IEMD(
         imf = sifting(residue, engine, depth, spline_lib, rbase, nlayers, lambdaNS, crit_type, epsilon, num_siftings)
         residue = residue - imf
         imfs[i,:,:] = imf
-        print("IMF ", count + 1, " done")
         count = count + 1
         if monotonic(residue, engine, depth):
             return imfs[:count], residue
     return imfs[:count], residue
+
+def debug_print(
+         max_imfs,
+         depth,
+         spline_lib, # Options: alglib, scipy
+         rbase, nlayers, lambdaNS,
+         crit_type,
+         epsilon, num_siftings,
+         ):
+    print("===== DEBUG =====")
+    print("max_imfs:", max_imfs, "\ndepth:", depth, "\nspline_lib:", spline_lib,
+            "\nrbase:", rbase, "nlayers:", nlayers, "lambdaNS:", lambdaNS,
+            "\ncrit_type:", crit_type,"\nepsilon:", epsilon, "num_siftings:", num_siftings)
+    print("=================")
 
 # Performs the sifting process until a single IMF is found
 def sifting(
