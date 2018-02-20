@@ -2,6 +2,7 @@ import scipy
 import numpy as np
 import matlab.engine
 import xalglib as xal
+import math
 
 
 # Starts the matlab engine and returns the engine as a object
@@ -17,12 +18,12 @@ def start_matlab_engine():
 def IEMD(
          img,
          engine,
-         max_imfs=10,
+         max_imfs=4,
          depth=0,
          spline_lib='alglib', # Options: alglib, scipy
-         rbase=5.0, nlayers=5, lambdaNS=0.0,
+         rbase=-1.0, nlayers=-1.0, lambdaNS=0.0001,
          crit_type='fixed',
-         epsilon=10, num_siftings=10,
+         epsilon=10, num_siftings=3,
          debug=0
          ):
     if debug > 0:
@@ -61,9 +62,9 @@ def sifting(
          engine,
          depth=0,
          spline_lib='alglib', # Options: alglib, scipy
-         rbase=5.0, nlayers=5, lambdaNS=0.0,
+         rbase=-1.0, nlayers=-1.0, lambdaNS=0.0001,
          crit_type='fixed',
-         epsilon=10, num_siftings=10,
+         epsilon=10, num_siftings=3,
          debug=0
         ):
     h_prev = img
@@ -85,7 +86,7 @@ def sifting(
 # If this variation is under a certain value, the sifting process terminates.
 # fixed is a termination based on a fixed number of siftings. Research has shown that 10 siftings will
 # consistently give optimal IMFs.
-def stopping_criterion(count, h_curr, h_prev, crit_type='fixed', num_siftings=10, epsilon=10):
+def stopping_criterion(count, h_curr, h_prev, crit_type='fixed', num_siftings=3, epsilon=10):
     if crit_type == 'fixed':
         return count == num_siftings
     elif crit_type == 'sd':
@@ -96,7 +97,7 @@ def stopping_criterion(count, h_curr, h_prev, crit_type='fixed', num_siftings=10
 
 
 # Performs a single sifting
-def single_sifting(img, engine, depth=0, spline_lib='alglib', rbase=5.0, nlayers=5, lambdaNS=0):
+def single_sifting(img, engine, depth=0, spline_lib='alglib', rbase=-1.0, nlayers=-1.0, lambdaNS=0.0001):
     maxima, minima, maxima_loc, minima_loc = extrema(img, engine, depth)
 
     x_max, y_max, z_max = triplex_coords(maxima_loc, maxima)
@@ -105,14 +106,29 @@ def single_sifting(img, engine, depth=0, spline_lib='alglib', rbase=5.0, nlayers
     upper_img = None
     lower_img = None
 
+    d_avg = 0
+    rbase_u = 0
+    nlayers_u = 0
+
     if spline_lib == 'scipy':
         upper_spline = create_spline(x_max, y_max, z_max)
         lower_spline = create_spline(x_min, y_min, z_min)
         _,_, upper_img = reconstruct(img.shape, upper_spline)
         _,_, lower_img = reconstruct(img.shape, lower_spline)
     elif spline_lib == 'alglib':
-        upper_spline = create_spline_v2(x_max, y_max, z_max, rbase, nlayers, lambdaNS)
-        lower_spline = create_spline_v2(x_min, y_min, z_min, rbase, nlayers, lambdaNS)
+        if rbase == -1.0:
+            rbase_u, d_avg = calc_rbase(img, engine, maxima_loc)
+        else:
+            rbase_u = rbase
+        if nlayers == -1.0:
+            if d_avg == 0:
+                _, d_avg = calc_rbase(img, engine, maxima_loc)
+            nlayers_u = calc_nlayers(rbase_u, d_avg)
+        else:
+            nlayers_u = nlayers
+        print("rbase_u:", rbase_u, "nlayers_u:", nlayers_u)
+        upper_spline = create_spline_v2(x_max, y_max, z_max, rbase_u, nlayers_u, lambdaNS)
+        lower_spline = create_spline_v2(x_min, y_min, z_min, rbase_u, nlayers_u, lambdaNS)
         _,_, upper_img = reconstruct_v2(img.shape, upper_spline)
         _,_, lower_img = reconstruct_v2(img.shape, lower_spline)
     else:
@@ -121,6 +137,16 @@ def single_sifting(img, engine, depth=0, spline_lib='alglib', rbase=5.0, nlayers
     mean = surface_mean(upper_img, lower_img)
 
     return mean
+
+def calc_rbase(img, eng, maxima_loc):
+    num_peaks = np.sum(maxima_loc)
+    area = img.shape[0] * img.shape[1]
+    d_avg = math.sqrt(area / num_peaks)
+    return 2 * d_avg, d_avg
+
+def calc_nlayers(rbase, d_avg):
+    return round(np.log(2 * rbase / d_avg) / np.log(2)) + 2
+
 
 # Checks whether the residue is monotonic or not, that is, if the residue has less than 2 extrema.
 def monotonic(residue, engine, depth=0):
@@ -143,8 +169,8 @@ def surface_mean(upper_img, lower_img):
 
 # Reconstructs the upper and lower plate based on found spline using SciPy algorithm.
 def reconstruct(size, spline):
-    x_grid = np.linspace(0, size[0], size[0])
-    y_grid = np.linspace(0, size[1], size[1])
+    x_grid = np.linspace(0, size[1], size[1])
+    y_grid = np.linspace(0, size[0], size[0])
     X, Y = np.meshgrid(x_grid, y_grid, indexing='xy')
     Z = np.zeros(size)
     Z = spline(X,Y)
@@ -152,10 +178,10 @@ def reconstruct(size, spline):
 
 # Reconstruction for alglib
 def reconstruct_v2(size, model):
-    x_grid = np.linspace(0, size[0], size[0])
-    y_grid = np.linspace(0, size[1], size[1])
+    x_grid = np.linspace(0, size[1], size[1])
+    y_grid = np.linspace(0, size[0], size[0])
     X, Y = np.meshgrid(x_grid, y_grid, indexing='xy')
-    Z = xal.rbfgridcalc2v(model, x_grid.tolist(), X.shape[0], x_grid.tolist(), Y.shape[0])
+    Z = xal.rbfgridcalc2v(model, x_grid.tolist(), size[1], y_grid.tolist(), size[0])
     Z = np.asarray(Z).reshape(size)
     return X, Y, Z
 
