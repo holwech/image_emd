@@ -126,7 +126,6 @@ def single_sifting(img, engine, depth=0, spline_lib='alglib', rbase=-1.0, nlayer
             nlayers_u = calc_nlayers(rbase_u, d_avg)
         else:
             nlayers_u = nlayers
-        print("rbase_u:", rbase_u, "nlayers_u:", nlayers_u)
         upper_spline = create_spline_v2(x_max, y_max, z_max, rbase_u, nlayers_u, lambdaNS)
         lower_spline = create_spline_v2(x_min, y_min, z_min, rbase_u, nlayers_u, lambdaNS)
         _,_, upper_img = reconstruct_v2(img.shape, upper_spline)
